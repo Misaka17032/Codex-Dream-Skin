@@ -1285,6 +1285,11 @@ function Get-DreamSkinLiveSessionContext {
   $state = $null
   try { $state = Read-DreamSkinState -Path $paths.State } catch { $state = $null }
   if ($null -eq $state -or -not $state.port -or -not $state.browserId) { return $null }
+  if (-not $state.injectorPid -or -not $state.injectorStartedAt) { return $null }
+  $recordedStart = Get-DreamSkinProcessStartedAt -ProcessId ([int]$state.injectorPid)
+  if (-not $recordedStart -or $recordedStart -cne "$($state.injectorStartedAt)") {
+    return $null
+  }
   $port = 0
   if (-not [int]::TryParse("$($state.port)", [ref]$port)) { return $null }
   Assert-DreamSkinPort -Port $port

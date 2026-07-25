@@ -66,6 +66,15 @@ try {
     Start-Process -FilePath $powershell -ArgumentList $argumentLine -WindowStyle Hidden | Out-Null
   }
 
+  function Request-DreamSkinApply {
+    Start-DreamSkinPowerShell -Script $startScript -Arguments @(
+      '-Port', "$Port",
+      '-PromptRestart',
+      '-RequireUnpaused',
+      '-OperationLockTimeoutMilliseconds', '15000'
+    )
+  }
+
   function Add-DreamSkinTrayItem {
     param(
       [Parameter(Mandatory = $true)]
@@ -118,11 +127,18 @@ try {
     $menu.Items.Clear()
     foreach ($oldItem in $oldItems) { $oldItem.Dispose() }
     $paused = Test-DreamSkinPaused -StateRoot $StateRoot
-    $state = $null
-    try { $state = Read-DreamSkinState -Path $paths.State } catch {}
+    $session = Get-DreamSkinLiveSessionContext -StateRoot $StateRoot
     $active = $null
     try { $active = Read-DreamSkinTheme -ThemeDirectory $paths.Active -SkipImageMetadata } catch {}
-    $status = if ($paused) { '状态：已暂停' } elseif ($state) { '状态：运行中' } else { '状态：未运行' }
+    $status = if ($paused) {
+      '状态：已暂停'
+    } elseif ($null -ne $session) {
+      '状态：运行中'
+    } elseif (Test-Path -LiteralPath $paths.State -PathType Leaf) {
+      '状态：注入已停止，请重新应用'
+    } else {
+      '状态：未运行'
+    }
     if ($null -ne $active -and $null -ne $active.Theme -and $active.Theme.name) {
       $status += " · $($active.Theme.name)"
     }
@@ -135,7 +151,7 @@ try {
       if ($null -ne $session) {
         $begin = Show-DreamSkinOperationUi -Session $session -Phase begin -Kind apply -TimeoutMs 3000
       }
-      Start-DreamSkinPowerShell -Script $startScript -Arguments @('-Port', "$Port", '-PromptRestart')
+      Request-DreamSkinApply
       # start-dream-skin is async; close the in-window loading so it does not stick for 180s.
       if ($null -ne $session -and $null -ne $begin -and $begin.Ok) {
         $null = Show-DreamSkinOperationUi -Session $session -Phase finish -Token $begin.Token `
@@ -154,7 +170,7 @@ try {
         if ($null -ne $session) {
           $begin = Show-DreamSkinOperationUi -Session $session -Phase begin -Kind apply -TimeoutMs 3000
         }
-        Start-DreamSkinPowerShell -Script $startScript -Arguments @('-Port', "$Port", '-PromptRestart')
+        Request-DreamSkinApply
         if ($null -ne $session -and $null -ne $begin -and $begin.Ok) {
           $null = Show-DreamSkinOperationUi -Session $session -Phase finish -Token $begin.Token `
             -UiState success -Message '已开始重新应用皮肤' -TimeoutMs 1500
@@ -196,7 +212,13 @@ try {
               -StateRoot $StateRoot
             Set-DreamSkinPaused -Paused $false -StateRoot $StateRoot | Out-Null
           }
-          $notify.ShowBalloonTip(1800, 'Codex Dream Skin', '背景图已更新。', [System.Windows.Forms.ToolTipIcon]::Info)
+          Request-DreamSkinApply
+          $notify.ShowBalloonTip(
+            2200,
+            'Codex Dream Skin',
+            '背景图已更新，正在重新应用皮肤…',
+            [System.Windows.Forms.ToolTipIcon]::Info
+          )
         }
       } finally {
         $dialog.Dispose()
@@ -252,7 +274,13 @@ try {
             $null = Use-DreamSkinSavedTheme -ThemeDirectory $savedPath -StateRoot $StateRoot
             Set-DreamSkinPaused -Paused $false -StateRoot $StateRoot | Out-Null
           }
-          $notify.ShowBalloonTip(1800, 'Codex Dream Skin', "已应用：$savedName", [System.Windows.Forms.ToolTipIcon]::Info)
+          Request-DreamSkinApply
+          $notify.ShowBalloonTip(
+            2200,
+            'Codex Dream Skin',
+            "已选择：$savedName。正在重新应用皮肤…",
+            [System.Windows.Forms.ToolTipIcon]::Info
+          )
         }.GetNewClosure()
         $null = Add-DreamSkinTrayItem -Items $savedMenu.DropDownItems -Text $savedName -Action $savedAction
       }
@@ -311,7 +339,7 @@ try {
   })
   $notify.add_DoubleClick({
     try {
-      Start-DreamSkinPowerShell -Script $startScript -Arguments @('-Port', "$Port", '-PromptRestart')
+      Request-DreamSkinApply
     } catch {
       Show-DreamSkinTrayError -Message $_.Exception.Message
     }

@@ -118,7 +118,7 @@ Release Setup 内置经过固定版本与哈希校验的 Node.js 运行时。普
 powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File .\windows\scripts\install-dream-skin.ps1
 ```
 
-源码安装会原子部署受管运行时、启动托盘，并在桌面创建 `Codex Dream Skin`、`Codex Dream Skin - Tray` 和 `Codex Dream Skin - Restore`；开始菜单会创建启动与托盘入口。安装完成后可以移动或删除当前源码目录，受管运行时仍会从 LocalAppData 工作。
+源码安装会原子部署受管运行时、启动托盘，并在桌面创建 `Codex Dream Skin`、`Codex Dream Skin - Tray` 和 `Codex Dream Skin - Restore`；开始菜单会创建启动与托盘入口。安装脚本本身不会立刻重启 Codex，安装后请从桌面或开始菜单打开 `Codex Dream Skin`，不要直接打开官方 Codex 入口。安装完成后可以移动或删除当前源码目录，受管运行时仍会从 LocalAppData 工作。
 
 源码安装首次启用超天酱 JPEG 主题，并保存 Pixel Cafe 与 Gothic Void Crusade 供托盘切换。
 

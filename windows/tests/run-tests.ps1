@@ -1055,6 +1055,26 @@ try {
   }
   $null = Use-DreamSkinSavedTheme -ThemeDirectory $savedTheme.Directory -StateRoot $themeStateRoot
 
+  $staleSessionState = [pscustomobject]@{
+    schemaVersion = 3
+    platform = 'windows'
+    port = 9335
+    injectorPid = $PID
+    injectorStartedAt = '2000-01-01T00:00:00.0000000Z'
+    injectorPath = (Join-Path $Root 'scripts\injector.mjs')
+    nodePath = 'C:\stale-node\node.exe'
+    codexExe = 'C:\stale-codex\ChatGPT.exe'
+    codexPackageRoot = 'C:\stale-codex'
+    codexPackageFullName = 'OpenAI.Codex_stale'
+    codexPackageFamilyName = 'OpenAI.Codex_stale'
+    browserId = '00000000-0000-4000-8000-000000000001'
+  }
+  Write-DreamSkinState -Path $themePaths.State -State $staleSessionState
+  if ($null -ne (Get-DreamSkinLiveSessionContext -StateRoot $themeStateRoot)) {
+    throw 'A stale or PID-reused injector state was reported as a live Dream Skin session.'
+  }
+  Remove-Item -LiteralPath $themePaths.State -Force
+
   $outsideTheme = Join-Path $temporaryRoot 'outside-theme'
   New-Item -ItemType Directory -Path $outsideTheme | Out-Null
   Copy-Item -LiteralPath (Join-Path $Root 'assets\dream-reference.jpg') `
@@ -1167,6 +1187,12 @@ try {
     -not $traySource.Contains("Set-DreamSkinPaused -Paused `$false") -or
     -not $traySource.Contains('[System.Windows.Forms.Application]::Exit()')) {
     throw 'Tray pause/resume no longer mirrors macOS live-remove and re-apply semantics.'
+  }
+  if ([regex]::Matches($traySource, 'Request-DreamSkinApply').Count -lt 6 -or
+    -not $traySource.Contains("'状态：注入已停止，请重新应用'") -or
+    -not $traySource.Contains("'-RequireUnpaused'") -or
+    -not $traySource.Contains("'-OperationLockTimeoutMilliseconds', '15000'")) {
+    throw 'Tray theme selection no longer detects a stale watcher or requests a serialized safe re-apply.'
   }
   $themeWindowsSource = Read-DreamSkinUtf8File -Path (Join-Path $Root 'scripts\theme-windows.ps1')
   foreach ($requiredLiveRemoveToken in @(
