@@ -20,7 +20,7 @@
 ## Install directly
 
 Ordinary users first install and quit the official Codex / ChatGPT app once,
-then download from [GitHub Releases](https://github.com/EmiyaKatuz/Codex-Dream-Skin/releases):
+then download from [GitHub Releases](https://github.com/Misaka17032/Codex-Dream-Skin/releases):
 
 - macOS: open `CodexDreamSkin-vX.Y.Z.dmg` and drag the app to Applications.
 - Windows: run `CodexDreamSkin-Setup-vX.Y.Z.exe` and follow the wizard.
@@ -95,60 +95,13 @@ to use and save it for one-click switching.
 
 > The downloadable user source is [`docs/images/presets/arina-hashimoto-source.png`](./docs/images/presets/arina-hashimoto-source.png) (`1672 × 941`); the source-only reference preset uses the normalized derived [`background.jpg`](./macos/presets/preset-arina-hashimoto/background.jpg) (`2560 × 1440`). Do not import either screenshot above: they contain real UI and are previews only. The background is a user-provided AI-generated example, not an official OpenAI/Codex visual or endorsement; do not put it in a public installer without confirmed likeness and asset rights.
 
-## Concept gallery (not importable backgrounds)
-
-These eight images communicate achievable visual directions, but they are
-interface mockups rather than usable theme backgrounds. Generate a UI-free
-`2560 × 1440` image with the copy-ready [reference prompt guide](./docs/reference-background-prompt-guide.en.md)
-before importing a similar look. See the [concept prompt breakdown](./docs/background-generation-prompts.md)
-for the eight individual styles.
-
-<p align="center">
-  <img src="docs/images/gallery/skin-01.jpg" alt="Pink Custom" width="900"><br>
-  <sub>Pink Custom</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-02.jpg" alt="God of Wealth" width="900"><br>
-  <sub>God of Wealth</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-03.jpg" alt="Red-White Sci-Fi" width="900"><br>
-  <sub>Red-White Sci-Fi</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-04.jpg" alt="Clear Custom" width="900"><br>
-  <sub>Clear Custom</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-05.jpg" alt="Inspiration" width="900"><br>
-  <sub>Inspiration</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-06.jpg" alt="Purple Night" width="900"><br>
-  <sub>Purple Night</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-07.jpg" alt="Cyan Virtual Singer" width="900"><br>
-  <sub>Cyan Virtual Singer</sub>
-</p>
-
-<p align="center">
-  <img src="docs/images/gallery/skin-08.jpg" alt="Stage Black-Gold" width="900"><br>
-  <sub>Stage Black-Gold</sub>
-</p>
-
 ## What it does
 
 - **Real UI** — Sidebar, cards, project picker, and input stay native. Not a fake full-window screenshot.
 - **Continuous wallpaper** — One 16:9 image spans the full window; adaptive focus, safe-area, and route treatment keep native content readable.
 - **Swappable art** — Drop in a UI-free image you like and it becomes your theme.
 - **Saved themes** — Switch local themes from the macOS menu bar or Windows system tray.
+- **Theme ZIP import** — Pick an ordinary `.zip` on either platform and add a validated pack to the local library.
 - **Restorable** — One-click restore to the stock look.
 - **Safer path** — Local-loopback CDP inject only. No official binary or signature changes.
 
@@ -158,7 +111,7 @@ for the eight individual styles.
 
 You do not need to clone the repository, install Node.js, or run `.sh` / `.ps1`
 files. Download the latest package for your platform from
-[GitHub Releases](https://github.com/EmiyaKatuz/Codex-Dream-Skin/releases), then
+[GitHub Releases](https://github.com/Misaka17032/Codex-Dream-Skin/releases), then
 follow the graphical first-run guide:
 
 | Platform | Download | Install guide |
@@ -171,6 +124,40 @@ are manual: download the new package and install over the existing one; themes
 and images are preserved. Because the public packages are unsigned, a new
 download may show a one-time OS security warning; the guides explain the safe
 GUI approval path.
+
+### Import a downloaded theme
+
+Choose **Import Theme ZIP…** from the macOS menu bar app or Windows tray. Only
+ordinary `.zip` files are accepted; the legacy `.dreamskin` extension is not
+supported, and renaming the suffix is not a supported migration path. An
+official Studio pack contains `manifest.json`, `theme.json`, and exactly one
+`background.webp|jpg|png`, plus non-empty `theme.css`; `LICENSE.txt` and the
+reserved `manifest.sig`. Put these files at ZIP root or inside exactly one
+top-level theme folder. The importer verifies platform and minimum-client
+compatibility plus every declared payload file's byte length and SHA-256.
+`theme.css` must pass the local Safe CSS validator and can affect only the 12
+registered parts. It is revalidated on every import and apply. `manifest.sig`
+is not used for signature verification.
+
+The local simplified ZIP must contain exactly non-empty `theme.json`, non-empty
+`theme.css`, and its referenced image. That format has no official
+manifest integrity or compatibility declaration and should come from a trusted
+source. Limits are 32 MiB per archive, 32 entries, and 64 MiB expanded. Import
+adds the pack to **Saved Themes** without changing the active theme. Identical
+content is not duplicated, and a distinct pack with an existing ID is
+preserved under a new safe ID.
+
+For a manual fallback, extract the archive and move the complete directory
+containing `theme.json`, `theme.css`, and its image into the saved-theme folder:
+
+- macOS: `~/Library/Application Support/CodexDreamSkinStudio/themes/`
+- Windows: `%LOCALAPPDATA%\CodexDreamSkin\themes\`
+
+Both controls include **Open Themes Folder**. Reopen the menu/tray after moving
+the directory. Do not add another wrapper level, links, nested archives, or an
+image-only folder without `theme.json`. Manual placement bypasses the ZIP
+importer's archive checks, so use trusted content only. Both controls also link
+directly to the DreamSkin.cc Gallery and online Studio.
 
 ### For developers: run from source
 

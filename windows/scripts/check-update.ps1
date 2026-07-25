@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $engineRoot = Split-Path -Parent $PSScriptRoot
 $versionPath = Join-Path $engineRoot 'VERSION'
-$repository = 'EmiyaKatuz/Codex-Dream-Skin'
+$repository = 'Misaka17032/Codex-Dream-Skin'
 $releasePage = "https://github.com/$repository/releases/latest"
 
 function ConvertTo-DreamSkinVersion {

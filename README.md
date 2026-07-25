@@ -10,13 +10,13 @@
   <sub>Windows 源码安装的默认主题素材；界面、动画与控件皮肤由运行时注入层生成</sub>
 </p>
 
-> 当前 fork 版本：`1.3.5`（2026-07-23 修订版）。主要开发与验证平台为 Windows；macOS 能力继承自上游项目并继续保留。
+> 当前 fork 版本：`1.5.2`（2026-07-25 上游同步与性能修订版）。主要开发与验证平台为 Windows；macOS 能力继承自上游项目并继续保留。
 
-Windows 与 macOS 安装包发布在本 fork 的 [GitHub Releases](https://github.com/EmiyaKatuz/Codex-Dream-Skin/releases)。
+Windows 与 macOS 安装包发布在本 fork 的 [GitHub Releases](https://github.com/Misaka17032/Codex-Dream-Skin/releases)。
 
 ## 这是什么
 
-这是基于 [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin) 开发的独立 fork。当前版本围绕「超天酱 · INTERNET ANGEL」重新设计了 Windows Codex Desktop 的视觉、交互与主题管理体验。
+这是 [EmiyaKatuz/Codex-Dream-Skin](https://github.com/EmiyaKatuz/Codex-Dream-Skin) 的二级 fork；其原始上游是 [Fei-Away/Codex-Dream-Skin](https://github.com/Fei-Away/Codex-Dream-Skin)。当前版本围绕「超天酱 · INTERNET ANGEL」重新设计了 Windows Codex Desktop 的视觉、交互与主题管理体验。
 
 侧栏、任务、建议卡、项目选择、输入框、设置和终端等 Codex 原生控件会直接呈现主题样式。主题通过仅绑定本机回环地址的 CDP 注入，不修改 `WindowsApps`、`app.asar`、应用签名或官方二进制。
 
@@ -60,11 +60,13 @@ Windows 与 macOS 安装包发布在本 fork 的 [GitHub Releases](https://githu
 - 暂停会立即卸下当前窗口皮肤；继续会清除暂停状态并立即重新应用。
 - watcher 会根据主题配置和图片内容修订值进行热更新，renderer 重载后仍能恢复当前主题。
 
-### 合并的可靠性修复
+### 合并的可靠性与性能修复
 
 - 收起或重建左侧栏时继续保留主题，避免短暂闪回 Codex 原生配色。
 - 只在确认主 Codex 窗口后应用皮肤，宠物等透明辅助窗口会清理残留背景。
-- DOM 主题刷新设有 `120ms` 最小间隔，文本匹配先于可见性测量，降低长会话中的重复扫描与布局读取。
+- 流式 DOM 变化使用 `400ms` 静默期合并，连续变化最多每 `1500ms` 执行一次完整分类；纯文本节点变化不再触发全量扫描。
+- 窗口和分栏缩放只更新背景与装饰几何，不再连带执行整页文本、组件和布局分类；全量兜底检查从 5 秒放宽到 30 秒。
+- 背景图直接使用经校验的 data URL，不再在 renderer 主线程执行 `atob → Uint8Array → Blob` 的整图复制。
 - CDP WebSocket、domain enable、同步和异步事件回调均有独立异常边界，失败会完整释放 session。
 - 暂停、恢复、renderer reload 与 watcher 退出会清理 fallback timer、监听器和持久化注入脚本。
 - 主壳重建时会释放旧 `ResizeObserver` target；托盘菜单重建及退出会释放 WinForms 资源。
@@ -73,19 +75,21 @@ Windows 与 macOS 安装包发布在本 fork 的 [GitHub Releases](https://githu
 
 ### 已整合的上游更新
 
-当前分支已合并上游 `upstream/main` 的 `7c4c19f`（上游版本 `1.3.3`），并纳入以下能力：
+当前分支已合并上游 `upstream/main` 的 `b5a614e`（上游版本 `1.5.2`），并纳入以下能力：
 
 - Windows Inno Setup 安装器、Release 构建流程、版本检查与手动覆盖更新支持。
 - `tools/selectors.json` 选择器契约，用于窗口身份验证、早期注入和主题 payload 校验。
 - 冷启动首帧等待、Store 自动更新后的路径识别、watcher 退出和引擎原子回滚改进。
-- 注入验证会核对当前活动主题 ID 与内容 revision，降低暂存资源和活动主题不一致的风险。
-- macOS 菜单栏应用、DMG 构建、应用图标、更新检查和统一通用运行时继续保留。
+- 注入验证会同时核对原生可见窗口、renderer 可见性、活动主题 ID 与内容 revision，避免把隐藏或后台 target 当成成功。
+- 支持受限 ZIP 主题导入、Safe CSS 白名单校验和 `dreamskin://` 官方主题一键应用流程。
+- 兼容 Codex 26.721+ 的 `.home-banners` 首页结构，避免空 banner 容器把真实内容挤出视口。
+- macOS 菜单栏应用、DMG 构建、应用图标、安全主题导入、窗口就绪验证和统一通用运行时继续保留。
 
 Windows 使用本 fork 的超天酱专属渲染覆盖层；macOS 使用上游通用运行时。两端共享选择器契约、主题格式和注入安全边界。
 
 ### v1.3.5 重发修复
 
-- 纳入本 fork [PR #1](https://github.com/EmiyaKatuz/Codex-Dream-Skin/pull/1) 的 Windows CSS 修复。
+- 保留父级超天酱 fork [PR #1](https://github.com/EmiyaKatuz/Codex-Dream-Skin/pull/1) 的 Windows CSS 修复。
 - 将变更卡片与侧边工作区规则中的嵌套 `:has()` 改写为等价的后代选择器组合，满足 CSS Selectors 规范及静态检查要求。
 - 更新响应式首页回归测试，持续校验侧边工作区首帧 fallback、终端排除条件和超天酱装饰标记。
 
@@ -95,7 +99,7 @@ Windows 使用本 fork 的超天酱专属渲染覆盖层；macOS 使用上游通
 
 Release 安装需要 Windows 10/11 x64，以及已注册到当前用户的 Microsoft Store 官方 `OpenAI.Codex` 应用。首次安装前请至少启动一次 Codex，随后退出 Codex 与旧版 Dream Skin 托盘。
 
-1. 从本 fork 的 [Latest Release](https://github.com/EmiyaKatuz/Codex-Dream-Skin/releases/latest) 下载 `CodexDreamSkin-Setup-vX.Y.Z.exe` 和 `SHA256SUMS.txt`。
+1. 从本 fork 的 [Latest Release](https://github.com/Misaka17032/Codex-Dream-Skin/releases/latest) 下载 `CodexDreamSkin-Setup-vX.Y.Z.exe` 和 `SHA256SUMS.txt`。
 2. 对照校验文件确认 Setup.exe 的 SHA-256，再双击运行安装向导。
 3. 保持默认的当前用户安装方式。安装过程不需要管理员权限。
 4. 安装完成后，从开始菜单打开 `Codex Dream Skin`；安装向导也可以在结束时直接启动托盘。
@@ -129,7 +133,7 @@ Release 用户从开始菜单打开 `Codex Dream Skin`；源码安装用户也�
 - 使用「完全恢复 Codex」清理 Dream Skin 状态并回到官方外观。
 - 手动检查本 fork 的最新 Release；该操作不会后台轮询、自动下载或静默安装。
 
-导入图片必须是纯背景，不要使用包含窗口、侧栏、输入框、文字或按钮的效果截图。图片最大 `16 MB`，单边不超过 `16384` 像素，总像素不超过 `5000 万`。
+导入图片必须是纯背景，不要使用包含窗口、侧栏、输入框、文字或按钮的效果截图。图片最大 `10 MiB`，单边不超过 `16384` 像素，总像素不超过 `5000 万`。
 
 ## 更新与卸载
 
@@ -139,7 +143,7 @@ Release 用户从开始菜单打开 `Codex Dream Skin`；源码安装用户也�
 2. 下载最新 Setup.exe，并核对对应的 SHA-256。
 3. 运行安装向导覆盖现有安装，再从开始菜单启动 `Codex Dream Skin`。
 
-覆盖安装会保留活动主题、已保存主题、导入图片和配置备份。本次 `v1.3.5` 修订版沿用相同版本号；已安装早期 `v1.3.5` 的用户需要手动重新下载安装包，托盘的版本比较无法识别同版本号内的重发修订。
+覆盖安装会保留活动主题、已保存主题、导入图片和配置备份。升级到 `v1.5.2` 后，托盘的手动更新检查会继续以此 fork 的 Release 版本为准。
 
 Release 用户可以从「设置 → 应用 → 已安装的应用」卸载 Codex Dream Skin。卸载器会先恢复 Codex 官方外观，并默认保留 `%LOCALAPPDATA%\CodexDreamSkin` 中的主题与图片。
 
@@ -153,7 +157,7 @@ Release 用户可以从「设置 → 应用 → 已安装的应用」卸载 Code
 
 ## macOS 安装
 
-macOS 普通用户可以从 [Latest Release](https://github.com/EmiyaKatuz/Codex-Dream-Skin/releases/latest) 下载 `CodexDreamSkin-vX.Y.Z.dmg`，把 `Codex Dream Skin.app` 拖入 Applications 后启动。DMG 已包含所需运行时，无需安装 Node.js、Homebrew 或执行 shell 命令。
+macOS 普通用户可以从 [Latest Release](https://github.com/Misaka17032/Codex-Dream-Skin/releases/latest) 下载 `CodexDreamSkin-vX.Y.Z.dmg`，把 `Codex Dream Skin.app` 拖入 Applications 后启动。DMG 已包含所需运行时，无需安装 Node.js、Homebrew 或执行 shell 命令。
 
 当前 macOS 安装包没有 Apple Developer ID 签名。首次打开遇到 Gatekeeper 提示时，请在「系统设置 → 隐私与安全性」核对并选择「仍要打开」，无需执行 `xattr` 或关闭 Gatekeeper。应用启动后可从菜单栏选择「安装 / 升级引擎」。完整步骤、更新和卸载方法见 [`docs/install-macos.md`](./docs/install-macos.md)。
 

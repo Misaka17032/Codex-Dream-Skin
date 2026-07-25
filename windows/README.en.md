@@ -18,7 +18,7 @@ Codex Dream Skin loads an external theme into the official Codex Windows desktop
 ## Release install (recommended for users)
 
 Download `CodexDreamSkin-Setup-vX.Y.Z.exe` from
-[GitHub Releases](https://github.com/EmiyaKatuz/Codex-Dream-Skin/releases) and
+[GitHub Releases](https://github.com/Misaka17032/Codex-Dream-Skin/releases) and
 follow [`docs/install-windows.md`](../docs/install-windows.md). The installer
 contains the pinned Node runtime, so users do not need a source checkout or to
 run a `.ps1` file. It installs per-user and should not request administrator
@@ -90,11 +90,45 @@ Open `Codex Dream Skin - Tray` to:
 - Recognize the managed skin at a glance through its custom Internet Angel pixel icon.
 - Start with three saved themes: the default Internet Angel JPEG, the lossless Pixel Cafe variant, and Gothic Void Crusade.
 - Import a PNG, JPEG, or WebP background.
+- Import an ordinary `.zip` theme pack into Saved Themes (`.dreamskin` is not supported).
 - Save the active theme and switch through saved themes.
 - Pause or resume the skin.
 - Reapply the theme or fully restore Codex.
 
-Import a UI-free wallpaper rather than a preview containing a window, sidebar, composer, text, or buttons. Images may be at most 16 MB, 16384 pixels on either side, and 50 million total pixels.
+For a reviewed, compatible three-payload theme on DreamSkin.cc, choose **Apply
+in app** to open `dreamskin://apply?version=...`. Windows shows a native
+confirmation first. After confirmation, the client downloads that exact version
+only from `https://api.dreamskin.cc`, checks the reviewed metadata, actual byte
+count, and SHA-256, then runs the same manifest, image, ZIP, and Safe CSS checks
+as manual import before switching. Codex may restart when it is open without a
+usable skin session, so save unfinished input first. The link cannot provide an
+arbitrary download URL, file path, command, or silent-apply option. Incomplete
+legacy themes remain rejected by the client.
+
+Import a UI-free wallpaper rather than a preview containing a window, sidebar, composer, text, or buttons. Images may be at most 10 MB, 16384 pixels on either side, and 50 million total pixels.
+
+Every new official Studio ZIP contains `manifest.json`, non-empty `theme.json`,
+non-empty `theme.css`, and exactly one `background.webp|jpg|png`, with optional `LICENSE.txt` and the
+reserved `manifest.sig`. Place them at archive root or inside exactly one
+top-level theme folder. A local simplified ZIP must contain exactly `theme.json`,
+`theme.css`, and its referenced image; because it lacks manifest integrity and compatibility
+data, use that format only for trusted content. Limits are 32 MiB compressed,
+32 entries, and 64 MiB expanded. Traversal, links/reparse entries, nested
+archives, and unregistered files are rejected. Official packs also verify the
+platform, minimum client version, and each payload's declared byte length and
+SHA-256. Safe CSS is locally revalidated on import and every apply, then runs
+only against the 12 registered parts. Previously saved legacy themes without
+CSS remain switchable and inject no extra CSS. `manifest.sig` is reserved and
+not used for signature verification. Import only adds to Saved
+Themes; it does not change the active theme. Identical content is not
+duplicated, while a different pack using an existing ID receives a new safe ID.
+
+For the manual fallback, choose **Open Themes Folder** and move in the complete
+extracted directory whose immediate children are `theme.json`, `theme.css`, and
+its image:
+`%LOCALAPPDATA%\CodexDreamSkin\themes\`. Reopen the tray menu afterward; do not
+add another wrapper directory. Manual placement bypasses archive checks, so use
+trusted content only.
 
 ## Restore and remove shortcuts
 
@@ -162,11 +196,15 @@ When `-Port` is omitted, the launcher searches for a free port beginning at `933
 
 Launch Codex through the `Codex Dream Skin` shortcut, then run verification. A normal Codex launch does not open the debug session used by Dream Skin.
 
+Starting with Codex Store `26.715.10079.0`, the owl runtime may convert package-activation arguments into a `codex://` path. The launcher detects that behavior and makes one raw-argument fallback attempt against the exact `ChatGPT.exe` in the same validated Store package; it does not change files or WindowsApps permissions.
+
+Field results in issue #235 now confirm two independent failures: WindowsApps returns `access-denied` for direct launch on `26.715.10079.0`, while `26.721.3404.0` retains the raw CDP arguments but its production runtime still opens no listener. Either result means that Codex/Windows combination cannot enable the skin within the project's safety boundary. The fallback is currently a safe diagnostic and rollback path, not a compatibility guarantee for affected owl builds. Do not take ownership of WindowsApps or patch the official package; keep the complete error and follow issue #235 for upstream compatibility status.
+
 ### The skin stops working after a Codex update
 
 Run the installer and launch shortcut again. The scripts rediscover the currently registered Store package instead of trusting an executable path from an older app version.
 
-Open the repository's [new issue page](https://github.com/EmiyaKatuz/Codex-Dream-Skin/issues/new/choose) and choose the bug form when reporting a problem. Include the Windows version, Codex source, reproduction steps, and relevant log lines. Remove secrets, `auth.json`, relay tokens, and private conversation content.
+Open the repository's [new issue page](https://github.com/Misaka17032/Codex-Dream-Skin/issues/new/choose) and choose the bug form when reporting a problem. Include the Windows version, Codex source, reproduction steps, and relevant log lines. Remove secrets, `auth.json`, relay tokens, and private conversation content.
 
 ## Security boundaries
 

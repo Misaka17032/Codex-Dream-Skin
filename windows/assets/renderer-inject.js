@@ -140,7 +140,12 @@
     "dream-goal-mode-trigger",
   ];
   const installToken = {};
-  const MUTATION_REFRESH_INTERVAL_MS = 120;
+  // Renderer mutations are extremely noisy while responses stream. Treat them
+  // as a burst and refresh after a short quiet period, with a bounded maximum
+  // wait so newly mounted controls are still classified promptly.
+  const MUTATION_REFRESH_INTERVAL_MS = 400;
+  const MUTATION_MAX_WAIT_MS = 1500;
+  const SAFETY_REFRESH_INTERVAL_MS = 30000;
   const ENSURE_ERROR_LOG_INTERVAL_MS = 30000;
   let samplingNativeShell = false;
   let observer = null;
@@ -208,18 +213,20 @@
   if (previous?.timer) clearInterval(previous.timer);
   if (previous?.scheduler?.timeout) clearTimeout(previous.scheduler.timeout);
   if (previous?.scheduler?.frame) window.cancelAnimationFrame?.(previous.scheduler.frame);
+  if (previous?.geometryFrame) {
+    window.cancelAnimationFrame?.(previous.geometryFrame);
+    clearTimeout(previous.geometryFrame);
+  }
   if (previous?.resizeHandler) window.removeEventListener("resize", previous.resizeHandler);
   previous?.motionQuery?.removeEventListener?.("change", previous.motionHandler);
-  if (previous?.artUrl) URL.revokeObjectURL(previous.artUrl);
+  if (previous?.artUrl?.startsWith?.("blob:")) URL.revokeObjectURL(previous.artUrl);
   document.documentElement?.classList?.remove?.("dream-preview-blink", "dream-preview-blink-half");
-  const artUrl = (() => {
-    const comma = artDataUrl.indexOf(",");
-    const binary = atob(artDataUrl.slice(comma + 1));
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    const mime = /^data:([^;,]+)/.exec(artDataUrl)?.[1] || "image/png";
-    return URL.createObjectURL(new Blob([bytes], { type: mime }));
-  })();
+  // The injector already validates and base64-encodes the local image. Browsers
+  // can consume that data URL directly, avoiding a second full-size atob copy,
+  // Uint8Array allocation and Blob allocation on the renderer main thread.
+  const artUrl = /^data:image\/(?:png|jpe?g|webp);base64,/i.test(artDataUrl)
+    ? artDataUrl
+    : "";
   const config = normalizeConfig(rawConfig);
   const motionQuery = window.matchMedia?.("(prefers-reduced-motion: reduce)") || null;
   let profile = {
@@ -1423,24 +1430,55 @@
         </div>`;
       chrome.dataset.dreamOrnaments = "7";
     }
-    const mainBox = shellMain.getBoundingClientRect?.();
-    const composerBox = home?.querySelector?.(".composer-surface-chrome")?.getBoundingClientRect?.();
-    if (mainBox?.width > 0 && mainBox?.height > 0) {
-      chrome.style?.setProperty?.("--dream-main-left", `${Math.round(mainBox.left)}px`);
-      chrome.style?.setProperty?.("--dream-main-top", `${Math.round(mainBox.top)}px`);
-      chrome.style?.setProperty?.("--dream-main-width", `${Math.round(mainBox.width)}px`);
-      chrome.style?.setProperty?.("--dream-main-height", `${Math.round(mainBox.height)}px`);
-      updateChotenArtGeometry(chrome, mainBox);
-      if (composerBox?.width > 0 && composerBox?.height > 0) {
-        chrome.style?.setProperty?.("--dream-composer-left", `${Math.round(composerBox.left - mainBox.left)}px`);
-        chrome.style?.setProperty?.("--dream-composer-right", `${Math.round(mainBox.right - composerBox.right)}px`);
-        chrome.style?.setProperty?.("--dream-composer-top", `${Math.round(composerBox.top - mainBox.top)}px`);
-      }
-    }
+    geometryShellMain = shellMain;
+    geometryHome = home;
+    refreshGeometry();
     chrome.classList.toggle("dream-home-shell", Boolean(home));
   };
 
-  const scheduler = { frame: null, timeout: null, dueAt: 0, lastRunAt: -Infinity };
+  let geometryShellMain = null;
+  let geometryHome = null;
+  let geometryFrame = null;
+  const refreshGeometry = () => {
+    geometryFrame = null;
+    const state = window[STATE_KEY];
+    if (state?.installToken === installToken) state.geometryFrame = null;
+    const chrome = document.getElementById(CHROME_ID);
+    const shellMain = geometryShellMain?.isConnected === false ? null : geometryShellMain;
+    const home = geometryHome?.isConnected === false ? null : geometryHome;
+    if (!chrome || !shellMain) return;
+    const mainBox = shellMain.getBoundingClientRect?.();
+    const composerBox = home?.querySelector?.(".composer-surface-chrome")?.getBoundingClientRect?.();
+    if (!mainBox || mainBox.width <= 0 || mainBox.height <= 0) return;
+    chrome.style?.setProperty?.("--dream-main-left", `${Math.round(mainBox.left)}px`);
+    chrome.style?.setProperty?.("--dream-main-top", `${Math.round(mainBox.top)}px`);
+    chrome.style?.setProperty?.("--dream-main-width", `${Math.round(mainBox.width)}px`);
+    chrome.style?.setProperty?.("--dream-main-height", `${Math.round(mainBox.height)}px`);
+    updateChotenArtGeometry(chrome, mainBox);
+    if (composerBox?.width > 0 && composerBox?.height > 0) {
+      chrome.style?.setProperty?.("--dream-composer-left", `${Math.round(composerBox.left - mainBox.left)}px`);
+      chrome.style?.setProperty?.("--dream-composer-right", `${Math.round(mainBox.right - composerBox.right)}px`);
+      chrome.style?.setProperty?.("--dream-composer-top", `${Math.round(composerBox.top - mainBox.top)}px`);
+    }
+  };
+  const scheduleGeometry = () => {
+    if (geometryFrame) return;
+    if (typeof window.requestAnimationFrame === "function") {
+      geometryFrame = window.requestAnimationFrame(refreshGeometry);
+    } else {
+      geometryFrame = setTimeout(refreshGeometry, 16);
+    }
+    const state = window[STATE_KEY];
+    if (state?.installToken === installToken) state.geometryFrame = geometryFrame;
+  };
+
+  const scheduler = {
+    frame: null,
+    timeout: null,
+    dueAt: 0,
+    lastRunAt: -Infinity,
+    mutationBurstStartedAt: 0,
+  };
   let lastEnsureErrorLogAt = -Infinity;
   const schedulerNow = () => {
     try {
@@ -1453,6 +1491,7 @@
   const runEnsureSafely = () => {
     const now = schedulerNow();
     scheduler.lastRunAt = now;
+    scheduler.mutationBurstStartedAt = 0;
     try {
       ensure();
       return true;
@@ -1479,20 +1518,32 @@
     if (state?.timer) clearInterval(state.timer);
     if (state?.scheduler?.timeout) clearTimeout(state.scheduler.timeout);
     if (state?.scheduler?.frame) window.cancelAnimationFrame?.(state.scheduler.frame);
+    if (state?.geometryFrame) {
+      window.cancelAnimationFrame?.(state.geometryFrame);
+      clearTimeout(state.geometryFrame);
+    }
     if (state?.resizeHandler) window.removeEventListener("resize", state.resizeHandler);
     state?.motionQuery?.removeEventListener?.("change", state.motionHandler);
-    if (state?.artUrl) URL.revokeObjectURL(state.artUrl);
+    if (state?.artUrl?.startsWith?.("blob:")) URL.revokeObjectURL(state.artUrl);
     delete window[STATE_KEY];
     return true;
   };
 
-  const scheduleEnsure = (minimumGapMs = 0) => {
+  const scheduleEnsure = (minimumGapMs = 0, debounceMutationBurst = false) => {
     if (scheduler.frame) return;
     const now = schedulerNow();
-    const delay = Math.max(0, minimumGapMs - (now - scheduler.lastRunAt));
+    let delay = Math.max(0, minimumGapMs - (now - scheduler.lastRunAt));
+    if (debounceMutationBurst) {
+      if (!scheduler.mutationBurstStartedAt) scheduler.mutationBurstStartedAt = now;
+      delay = Math.min(
+        minimumGapMs,
+        Math.max(0, scheduler.mutationBurstStartedAt + MUTATION_MAX_WAIT_MS - now),
+      );
+    }
     const dueAt = now + delay;
     if (scheduler.timeout) {
-      if (scheduler.dueAt <= dueAt) return;
+      if (!debounceMutationBurst && scheduler.dueAt <= dueAt) return;
+      if (debounceMutationBurst && Math.abs(scheduler.dueAt - dueAt) < 1) return;
       clearTimeout(scheduler.timeout);
       scheduler.timeout = null;
       scheduler.dueAt = 0;
@@ -1522,22 +1573,32 @@
     .filter((className) => className && className !== "codex-dream-skin" && !className.startsWith("dream-"))
     .sort()
     .join(" ");
-  const resizeHandler = () => scheduleEnsure();
+  const resizeHandler = () => scheduleGeometry();
   const motionHandler = () => scheduleEnsure();
   window.addEventListener("resize", resizeHandler, { passive: true });
   motionQuery?.addEventListener?.("change", motionHandler);
   if (typeof ResizeObserver === "function") {
-    resizeObserver = new ResizeObserver(() => scheduleEnsure());
+    resizeObserver = new ResizeObserver(() => scheduleGeometry());
   }
   observer = new MutationObserver((records) => {
     if (samplingNativeShell) return;
     const hasApplicationChange = records.some((record) => {
+      if (record.type === "childList") {
+        const changedNodes = [
+          ...(record.addedNodes || []),
+          ...(record.removedNodes || []),
+        ];
+        // Streaming responses commonly append text nodes. They cannot change
+        // any selector-based component classification, so do not wake the
+        // expensive full renderer pass for those mutations.
+        return changedNodes.length === 0 || changedNodes.some((node) => node?.nodeType === 1);
+      }
       if (record.type !== "attributes" || record.attributeName !== "class") return true;
       return withoutManagedClasses(record.oldValue)
         !== withoutManagedClasses(record.target?.getAttribute?.("class"));
     });
     if (!hasApplicationChange) return;
-    scheduleEnsure(MUTATION_REFRESH_INTERVAL_MS);
+    scheduleEnsure(MUTATION_REFRESH_INTERVAL_MS, true);
   });
   observer.observe(document.documentElement, {
     childList: true,
@@ -1546,9 +1607,10 @@
     attributeOldValue: true,
     attributeFilter: ["class", "data-theme", "data-appearance", "data-color-mode"],
   });
-  const timer = setInterval(runEnsureSafely, 5000);
+  const timer = setInterval(runEnsureSafely, SAFETY_REFRESH_INTERVAL_MS);
   const runtimeState = {
     ensure: runEnsureSafely, cleanup, observer, resizeObserver, timer, scheduler, resizeHandler, motionQuery, motionHandler,
+    geometryFrame,
     artUrl, profile, config, installToken, version: SKIN_VERSION,
     themeId: config.themeId,
     revision: PAYLOAD_REVISION,
@@ -1568,4 +1630,4 @@
     runEnsureSafely();
   });
   return { installed: true, version: SKIN_VERSION, revision: PAYLOAD_REVISION, adaptive: true };
-})(__DREAM_CSS_JSON__, __DREAM_ART_JSON__, __DREAM_THEME_JSON__)
+})(__DREAM_SKIN_CSS_JSON__, __DREAM_SKIN_ART_JSON__, __DREAM_SKIN_THEME_JSON__)

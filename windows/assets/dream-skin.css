@@ -55,6 +55,23 @@
   --dream-task-immersive-far: color-mix(in oklab, var(--dream-surface) 60%, transparent);
 }
 
+/* Keep Codex-owned dropdown/popover tokens aligned with the active theme.
+   Codex 26.721+ resolves these from appearanceTheme independently. */
+html.codex-dream-skin {
+  --color-token-dropdown-background: var(--dream-surface-raised);
+}
+
+html.codex-dream-skin [class~="bg-token-dropdown-background"] {
+  color: var(--dream-text);
+  --color-token-foreground: var(--dream-text);
+  --color-token-text-secondary: var(--dream-text-muted);
+  --color-token-muted-foreground: var(--dream-text-muted);
+  --color-token-description-foreground: var(--dream-text-muted);
+  --color-token-list-hover-background: var(--dream-accent-hover);
+  --color-token-border: var(--dream-line);
+  --color-token-border-default: var(--dream-line);
+}
+
 html.codex-dream-skin body {
   background: var(--dream-canvas) !important;
   color: var(--dream-text) !important;
@@ -340,6 +357,38 @@ html.codex-dream-skin.dream-safe-center .dream-home > div:first-child > div:firs
   right: 0 !important;
   top: 100% !important;
   margin-top: 16px !important;
+}
+
+/* Codex 26.721+ moved the actual Home content beside the usually-empty
+   .home-banners wrapper. Do not let the legacy first-child hero sizing turn
+   that empty slot into a full-height spacer that pushes the real content out
+   of view. */
+html.codex-dream-skin
+  .dream-home > div:first-child:has(> .home-banners) {
+  min-height: 0 !important;
+  height: auto !important;
+  padding-top: 0 !important;
+}
+
+html.codex-dream-skin
+  .dream-home > div:first-child:has(> .home-banners) > .home-banners {
+  flex: 0 1 auto !important;
+  min-height: 0 !important;
+}
+
+html.codex-dream-skin
+  .dream-home > div:first-child:has(> .home-banners) > .home-banners > div:first-child {
+  height: auto !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.codex-dream-skin
+  .dream-home > div:first-child:has(> .home-banners) > .home-banners > div:first-child::before {
+  content: none !important;
 }
 
 .dream-home .group\/home-suggestions {

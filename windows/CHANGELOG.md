@@ -1,5 +1,19 @@
 # Windows Changelog
 
+## 1.5.2 — 2026-07-25
+
+### 上游同步
+
+- 合并上游 `b5a614e`：加入受限 ZIP / Safe CSS 主题导入、`dreamskin://` 官方主题应用、Store owl 诊断加固、原生窗口可见性验证，以及 Codex 26.721+ `.home-banners` 首页结构修复。
+- 保留两套超天酱主题、专属 renderer、托盘图标、动画和组件分类，不以通用 runtime 覆盖 Windows 主题实现。
+
+### 性能
+
+- 流式 DOM 变化改为 400ms 静默期、1500ms 最大等待的尾随刷新；纯文本节点变化不再唤醒完整分类，30 秒才执行一次安全兜底扫描。
+- 窗口与分栏缩放只刷新背景和装饰几何，不再执行整页文本、组件和布局分类。
+- renderer 直接消费经校验的图片 data URL，移除主线程上的 `atob`、逐字节 `Uint8Array` 和 Blob 二次复制。
+- CDP load fallback timer、事件订阅、signal handler 与关闭 session 统一清理，避免长期 watcher 运行时积累。
+
 ## 1.3.5 — 2026-07-23
 
 ### 性能

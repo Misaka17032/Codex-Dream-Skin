@@ -9,10 +9,10 @@ const windowsRoot = path.resolve(here, "..");
 const template = await fs.readFile(path.join(windowsRoot, "assets", "renderer-inject.js"), "utf8");
 const css = await fs.readFile(path.join(windowsRoot, "assets", "dream-skin.css"), "utf8");
 const buildPayload = (config = {}) => template
-  .replace("__DREAM_CSS_JSON__", JSON.stringify(".fixture { color: blue; }"))
-  .replace("__DREAM_ART_JSON__", JSON.stringify("data:image/png;base64,AA=="))
-  .replace("__DREAM_THEME_JSON__", JSON.stringify(config))
-  .replace("__DREAM_SKIN_VERSION_JSON__", JSON.stringify("1.3.5"))
+  .replace("__DREAM_SKIN_CSS_JSON__", JSON.stringify(".fixture { color: blue; }"))
+  .replace("__DREAM_SKIN_ART_JSON__", JSON.stringify("data:image/png;base64,AA=="))
+  .replace("__DREAM_SKIN_THEME_JSON__", JSON.stringify(config))
+  .replace("__DREAM_SKIN_VERSION_JSON__", JSON.stringify("1.5.2"))
   .replace("__DREAM_SKIN_PAYLOAD_REVISION_JSON__", JSON.stringify("test-revision"));
 const payload = buildPayload();
 
@@ -269,13 +269,14 @@ assert.ok(template.includes('const NEW_TASK_CLASS = "dream-new-task-button"')
 assert.match(css, /\.dream-sidebar-packet\s*\{[^}]*writing-mode:\s*vertical-rl/s,
   "Sidebar affection telemetry must use the reserved edge rail instead of overlapping the new-task row.");
 assert.ok(template.includes('const withoutManagedClasses = (value)')
-  && template.includes('const MUTATION_REFRESH_INTERVAL_MS = 120')
-  && template.includes('scheduleEnsure(MUTATION_REFRESH_INTERVAL_MS)')
-  && template.includes('if (scheduler.dueAt <= dueAt) return;')
+  && template.includes('const MUTATION_REFRESH_INTERVAL_MS = 400')
+  && template.includes('const MUTATION_MAX_WAIT_MS = 1500')
+  && template.includes('scheduleEnsure(MUTATION_REFRESH_INTERVAL_MS, true)')
+  && template.includes('scheduler.mutationBurstStartedAt + MUTATION_MAX_WAIT_MS')
   && template.includes('window.requestAnimationFrame(runEnsure)')
   && template.includes('attributeOldValue: true')
   && template.includes('window.addEventListener("resize", resizeHandler'),
-  "Route changes must use a time-bounded observer throttle and ignore skin-owned class mutations.");
+  "Route changes must use a bounded trailing debounce and ignore skin-owned class mutations.");
 assert.ok(template.includes('const STYLE_REVISION = "8"')
   && template.includes('existingStyle.dataset.dreamVersion = STYLE_REVISION')
   && !template.includes('existingStyle.dataset.dreamVersion = "3"'),
@@ -286,14 +287,21 @@ assert.ok(template.indexOf('.filter(({ text }) => pattern.test(text))')
     < template.indexOf('.filter(({ node }) => measureTextCandidate(node).visible)'),
   "Portal fallback labels must be matched by text before any layout/style measurement.");
 assert.ok(template.includes('const runEnsureSafely = () =>')
-  && template.includes('setInterval(runEnsureSafely, 5000)')
+  && template.includes('const SAFETY_REFRESH_INTERVAL_MS = 30000')
+  && template.includes('setInterval(runEnsureSafely, SAFETY_REFRESH_INTERVAL_MS)')
   && template.includes('ensure: runEnsureSafely'),
   "Observer, interval, and external renderer refreshes must share an exception boundary.");
-assert.ok(template.includes('new ResizeObserver(() => scheduleEnsure())')
+assert.ok(template.includes('new ResizeObserver(() => scheduleGeometry())')
   && template.includes('resizeObserver.observe(target)')
   && template.includes('resizeObserver.unobserve(target)')
+  && template.includes('const refreshGeometry = () =>')
   && template.includes('state?.resizeObserver?.disconnect()'),
-  "Split-pane geometry changes must refresh the skin during panel animation and release observers on cleanup.");
+  "Split-pane geometry changes must use the lightweight geometry path and release observers on cleanup.");
+assert.ok(!template.includes("atob(")
+  && !template.includes("new Uint8Array")
+  && !template.includes("URL.createObjectURL(new Blob")
+  && template.includes("can consume that data URL directly"),
+  "The renderer must not duplicate the full image through atob, Uint8Array and Blob on its main thread.");
 assert.ok(template.includes('if (previous?.resizeHandler) window.removeEventListener("resize", previous.resizeHandler)')
   && template.includes('previous?.motionQuery?.removeEventListener?.("change", previous.motionHandler)')
   && template.includes('motionQuery?.addEventListener?.("change", motionHandler)'),
@@ -742,7 +750,7 @@ const main = createFixture({ shellPresent: true });
 const mainResult = vm.runInNewContext(payload, main.context);
 assert.equal(mainResult.installed, true);
 assert.equal(main.rootClasses.has("codex-dream-skin"), true);
-assert.equal(main.rootStyles.get("--dream-art"), 'url("blob:fixture-1")');
+assert.equal(main.rootStyles.get("--dream-art"), 'url("data:image/png;base64,AA==")');
 assert.equal(main.nodes.has("codex-dream-skin-style"), true);
 assert.equal(main.nodes.has("codex-dream-skin-chrome"), true);
 assert.equal(main.context.window.__CODEX_DREAM_SKIN_STATE__.styleNode,
@@ -756,7 +764,7 @@ assert.equal(main.rootClasses.has("codex-dream-skin"), false);
 assert.equal(main.rootClasses.has("dream-theme-dark"), false);
 assert.equal(main.nodes.has("codex-dream-skin-style"), false);
 assert.equal(main.nodes.has("codex-dream-skin-chrome"), false);
-assert.deepEqual(main.revokedUrls, ["blob:fixture-1"]);
+assert.deepEqual(main.revokedUrls, []);
 
 const mutationBurst = createFixture({ shellPresent: true });
 vm.runInNewContext(payload, mutationBurst.context);
@@ -767,6 +775,17 @@ mutationObserver.callback(applicationMutation);
 mutationObserver.callback(applicationMutation);
 assert.equal(mutationBurst.getTimeoutCalls(), 1,
   "A burst of renderer mutations must queue one throttled refresh instead of one refresh per record batch.");
+
+const textOnlyMutation = createFixture({ shellPresent: true });
+vm.runInNewContext(payload, textOnlyMutation.context);
+textOnlyMutation.observers[0].callback([{
+  type: "childList",
+  target: textOnlyMutation.context.document.body,
+  addedNodes: [{ nodeType: 3 }],
+  removedNodes: [],
+}]);
+assert.equal(textOnlyMutation.getTimeoutCalls(), 0,
+  "Streaming text-node mutations must not wake the full DOM classification pass.");
 
 const irrelevantTextCandidates = Array.from({ length: 1000 }, () => ({
   textContent: "ordinary streaming response content",
@@ -794,9 +813,9 @@ const firstState = reinjected.context.window.__CODEX_DREAM_SKIN_STATE__;
 vm.runInNewContext(payload, reinjected.context);
 const secondState = reinjected.context.window.__CODEX_DREAM_SKIN_STATE__;
 assert.notEqual(secondState.installToken, firstState.installToken);
-assert.equal(secondState.artUrl, "blob:fixture-2");
-assert.equal(reinjected.rootStyles.get("--dream-art"), 'url("blob:fixture-2")');
-assert.deepEqual(reinjected.revokedUrls, ["blob:fixture-1"]);
+assert.equal(secondState.artUrl, "data:image/png;base64,AA==");
+assert.equal(reinjected.rootStyles.get("--dream-art"), 'url("data:image/png;base64,AA==")');
+assert.deepEqual(reinjected.revokedUrls, []);
 assert.equal(firstState.cleanup(), false);
 assert.equal(secondState.cleanup(), true);
 
